@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Production Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.46.0/dist/apexcharts.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d1117;
+  --bg2:       #161b22;
+  --bg3:       #1c2230;
+  --border:    #21262d;
+  --border2:   #30363d;
+  --text1:     #e6edf3;
+  --text2:     #8b949e;
+  --text3:     #6e7681;
+  --accent:    #58a6ff;
+  --accent2:   #1f6feb;
+  --sidebar-w: 220px;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text1);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ═══════════════════════════
+   SIDEBAR
+═══════════════════════════ */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0;
+  height: 100vh;
+  z-index: 100;
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-logo {
+  padding: 22px 18px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-logo svg { width: 22px; height: 22px; color: var(--accent); flex-shrink: 0; }
+.sidebar-logo span { font-size: .98rem; font-weight: 700; color: var(--text1); letter-spacing: .3px; }
+
+.nav-label {
+  padding: 18px 18px 6px;
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  color: var(--text3);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 2px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .88rem;
+  color: var(--text2);
+  transition: background .15s, color .15s;
+  user-select: none;
+}
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.nav-item:hover  { background: var(--bg3); color: var(--text1); }
+.nav-item.active { background: var(--accent2); color: #fff; }
+.nav-item.disabled { opacity: .35; cursor: not-allowed; }
+
+/* ═══════════════════════════
+   MAIN
+═══════════════════════════ */
+#main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Top bar ── */
+#topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+#topbar-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text1);
+}
+
+/* ── Upload zone ── */
+#upload-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border: 1px dashed var(--border2);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .82rem;
+  color: var(--text2);
+  background: var(--bg3);
+  transition: border-color .2s, color .2s, background .2s;
+  white-space: nowrap;
+}
+#upload-zone:hover, #upload-zone.drag-over {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(88,166,255,.07);
+}
+#upload-zone svg { width: 16px; height: 16px; flex-shrink: 0; }
+#file-input { display: none; }
+
+#file-status {
+  font-size: .75rem;
+  color: #3fb950;
+  margin-top: 3px;
+  text-align: right;
+}
+
+/* ── Content ── */
+#content { padding: 24px 28px; flex: 1; }
+
+/* ── Section ── */
+.section { display: none; }
+.section.active { display: flex; flex-direction: column; gap: 20px; }
+
+.section-header { margin-bottom: 20px; }
+.section-title  { font-size: 1.15rem; font-weight: 700; color: var(--text1); }
+.section-sub    { font-size: .82rem;  color: var(--text3); margin-top: 3px; }
+
+/* ── Subsection divider ── */
+.sub-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 16px;
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+  color: var(--text3);
+}
+.sub-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Charts grid ── */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+}
+.chart-full { grid-column: 1 / -1; }
+/* Stops: sidebar holds KPI panel + pie stacked */
+.stops-sidebar {
+  width: 340px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 300px;
+}
+
+
+/* ── Chart + KPI wrapper ── */
+.chart-kpi-wrap {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+/* Only the main chart card (not KPI panel, not pie card) gets flex:1 */
+.chart-kpi-wrap > .card:not(.pie-side-card) { flex: 1; min-width: 0; }
+
+/* ── KPI panel ── */
+.kpi-panel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 600px;
+}
+.kpi-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 11px;
+  flex-shrink: 0;
+}
+.kpi-series-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: var(--text2);
+  padding-left: 8px;
+  margin-bottom: 8px;
+}
+/* 3 KPI cards side by side */
+.kpi-cards-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.kpi-card {
+  background: var(--bg3);
+  border-radius: 7px;
+  padding: 8px 8px;
+}
+.kpi-card-label {
+  font-size: .58rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-card-val {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--text1);
+  letter-spacing: -.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-diff-val  { font-size: .78rem; font-weight: 700; line-height: 1.2; }
+.kpi-diff-abs  { font-size: .64rem; margin-top: 2px; opacity: .85; }
+.kpi-up      { color: #3fb950; }
+.kpi-down    { color: #ff7b72; }
+.kpi-neutral { color: var(--text3); }
+/* Pie side card: fixed width, don't flex-grow */
+.pie-side-card {
+  flex: none !important;
+  width: 300px;
+  min-height: 300px;
+}
+/* Pie chart placeholder height */
+.pie-wrap { min-height: 280px; }
+
+/* ── KPIs below chart (OEE, Stops-Hours) ── */
+.chart-below-kpis {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* The chart card inside chart-below-kpis gets full width */
+.chart-below-kpis > .card          { width: 100%; min-width: 0; }
+.chart-below-kpis > .chart-kpi-wrap { width: 100%; }
+/* KPI sections displayed as a horizontal row below the chart */
+.kpi-row-below {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.kpi-row-below .kpi-section {
+  flex: 1;
+  min-width: 180px;
+}
+
+/* ── Chart Group ── */
+.chart-group {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 20px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chart-group-title {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--accent);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 18px 10px;
+  transition: border-color .2s;
+}
+.card:hover { border-color: var(--border2); }
+
+.card-title {
+  font-size: .78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+
+.chart-wrap { min-height: 220px; }
+
+/* ── Empty state ── */
+#empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 14px;
+  color: var(--text3);
+  text-align: center;
+}
+#empty-state svg { width: 52px; height: 52px; }
+#empty-state h2  { font-size: 1.05rem; font-weight: 600; color: var(--text2); }
+#empty-state p   { font-size: .85rem; max-width: 340px; line-height: 1.65; }
+
+/* ── Badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: .72rem;
+  font-weight: 500;
+  background: rgba(88,166,255,.12);
+  color: var(--accent);
+  border: 1px solid rgba(88,166,255,.2);
+  margin-left: 8px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 58px; }
+  .sidebar-logo span, .nav-item span, .nav-label { display: none; }
+  .nav-item { justify-content: center; }
+  .charts-grid { grid-template-columns: 1fr; }
+  #topbar { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════
+     SIDEBAR
+════════════════════════════════════ -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+    </svg>
+    <span>AFG USA Dashboard</span>
+  </div>
+
+  <div class="nav-label">Analytics</div>
+
+  <div class="nav-item active" data-section="efficiency">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    <span>Efficiency</span>
+  </div>
+
+  <div class="nav-item" data-section="expenses">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="1" x2="12" y2="23"/>
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+    </svg>
+    <span>Expenses</span>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════
+     MAIN
+════════════════════════════════════ -->
+<div id="main">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div>
+      <div id="topbar-title">Efficiency</div>
+    </div>
+    <div>
+      <div id="upload-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="handleDragOver(event)"
+           ondragleave="handleDragLeave(event)"
+           ondrop="handleDrop(event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span id="upload-label">Drop Excel or click to upload</span>
+      </div>
+      <div id="file-status"></div>
+      <input type="file" id="file-input" accept=".xlsx,.xls" onchange="handleFileInput(event)"/>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Empty state -->
+    <div id="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <h2>No data loaded</h2>
+      <p>Upload an Excel file containing <strong>FORGING DATA</strong> and <strong>PROCESSING DATA</strong> sheets.</p>
+    </div>
+
+    <!-- ── Efficiency section ── -->
+    <div class="section" id="section-efficiency">
+
+      <div class="section-header">
+        <div class="section-title">
+          Efficiency
+          <span class="badge" id="date-range-badge"></span>
+        </div>
+        <div class="section-sub">Production performance — Forging &amp; Processing</div>
+      </div>
+
+      <!-- ══ GROUP: Producción ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">Producción</div>
+
+        <!-- Cycles / Hour + KPIs -->
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Cycles / Hour</div><div class="chart-wrap" id="chart-cyclesHour"></div></div>
+          <div class="kpi-panel" id="kpis-cyclesHour"></div>
+        </div>
+
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Forged Cycles</div><div class="chart-wrap" id="chart-forgedCycles"></div></div>
+          <div class="kpi-panel" id="kpis-forgedCycles"></div>
+        </div>
+
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Forged Parts</div><div class="chart-wrap" id="chart-forgedParts"></div></div>
+          <div class="kpi-panel" id="kpis-forgedParts"></div>
+        </div>
+      </div>
+
+      <!-- ══ GROUP: Eficiencia ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">Eficiencia</div>
+
+        <div class="chart-full chart-below-kpis">
+          <div class="card"><div class="card-title">OEE</div><div class="chart-wrap" id="chart-oee"></div></div>
+          <div class="kpi-row-below" id="kpis-oee"></div>
+        </div>
+
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Average Working Speed</div><div class="chart-wrap" id="chart-speed"></div></div>
+          <div class="kpi-panel" id="kpis-speed"></div>
+        </div>
+      </div>
+
+      <!-- ══ GROUP: Paradas ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">Paradas</div>
+
+        <div class="chart-full chart-below-kpis">
+          <div class="chart-kpi-wrap">
+            <div class="card"><div class="card-title">Stops — Hours</div><div class="chart-wrap" id="chart-stopsHours"></div></div>
+            <div class="card pie-side-card"><div class="card-title">Breakdown — Latest Month</div><div class="pie-wrap" id="chart-stopsHoursPie"></div></div>
+          </div>
+          <div class="kpi-row-below" id="kpis-stopsHours"></div>
+        </div>
+
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Stops — Cumulative Sum</div><div class="chart-wrap" id="chart-stopsSum"></div></div>
+          <div class="card pie-side-card"><div class="card-title">Cumulative Breakdown</div><div class="pie-wrap" id="chart-stopsSumPie"></div></div>
+        </div>
+      </div>
+
+      <!-- ══ GROUP: Procesado ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">Procesado</div>
+
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Parts Sold</div><div class="chart-wrap" id="chart-partsSold"></div></div>
+          <div class="kpi-panel" id="kpis-partsSold"></div>
+        </div>
+
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Weight Processed (Net)</div><div class="chart-wrap" id="chart-weight"></div></div>
+          <div class="kpi-panel" id="kpis-weight"></div>
+        </div>
+      </div>
+
+    </div><!-- /section-efficiency -->
+
+    <!-- ── Expenses section ── -->
+    <div class="section" id="section-expenses">
+
+      <div class="section-header">
+        <div class="section-title">
+          Expenses
+          <span class="badge" id="exp-date-range-badge"></span>
+        </div>
+        <div class="section-sub">Cost tracking — Tool &amp; Die, LC Invoices, Maintenance</div>
+      </div>
+
+      <!-- ══ GROUP: Tool & Die ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">Tool &amp; Die</div>
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">Tool &amp; Die Costs</div><div class="chart-wrap" id="chart-toolDie"></div></div>
+          <div class="kpi-panel" id="kpis-toolDie"></div>
+        </div>
+      </div>
+
+      <!-- ══ GROUP: LC Invoices ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">LC Invoices</div>
+        <div class="chart-full chart-kpi-wrap">
+          <div class="card"><div class="card-title">LC Invoices &amp; Other Expenses</div><div class="chart-wrap" id="chart-lcInvoices"></div></div>
+          <div class="kpi-panel" id="kpis-lcInvoices"></div>
+        </div>
+      </div>
+
+      <!-- ══ GROUP: Maintenance ══ -->
+      <div class="chart-group">
+        <div class="chart-group-title">Maintenance Expenses</div>
+        <div class="chart-full chart-below-kpis">
+          <div class="card"><div class="card-title">Maintenance Expenses</div><div class="chart-wrap" id="chart-maintenance"></div></div>
+          <div class="kpi-row-below" id="kpis-maintenance"></div>
+        </div>
+      </div>
+
+    </div><!-- /section-expenses -->
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ═══════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ══════════════════════════════════════════
+// PALETTE  (vibrant, dark-theme friendly)
+// ══════════════════════════════════════════
+const PALETTE = [
+  '#58a6ff','#3fb950','#f0883e','#ff7b72',
+  '#bc8cff','#39d0d8','#ffd33d','#79c0ff',
+  '#56d364','#ff9bce'
+];
+
+// ══════════════════════════════════════════
+// DATE RANGE  (Jan prev-year → prev month)
+// ══════════════════════════════════════════
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_LONG  = ['january','february','march','april','may','june',
+                      'july','august','september','october','november','december'];
+
+function getRange() {
+  const today = new Date();
+  let   endM  = today.getMonth() - 1,
+        endY  = today.getFullYear();
+  if (endM < 0) { endM = 11; endY--; }
+  return {
+    startY: endY - 1, startM: 0,   // Jan of previous year
+    endY,             endM
+  };
+}
+
+/** Parse a month label like "JANUARY 25", "Jan-26", "JAN", "Feb 2025" … */
+function parseLabel(label) {
+  if (label === null || label === undefined) return null;
+  const s = String(label).trim().toLowerCase();
+  const mi = MONTHS_LONG.findIndex(m => s.startsWith(m.slice(0, 3)));
+  if (mi === -1) return null;
+
+  // Look for 2- or 4-digit year
+  const ym = s.match(/(\d{4})|(\d{2})/);
+  if (!ym) return null;
+  const raw = parseInt(ym[0]);
+  const year = raw < 100 ? 2000 + raw : raw;
+  return { year, month: mi }; // month 0-indexed
+}
+
+function inRange(parsed, range) {
+  if (!parsed) return false;
+  const n     = parsed.year * 12 + parsed.month;
+  const start = range.startY * 12 + range.startM;
+  const end   = range.endY   * 12 + range.endM;
+  return n >= start && n <= end;
+}
+
+function shortLabel(parsed) {
+  return MONTHS_SHORT[parsed.month] + " '" + String(parsed.year).slice(2);
+}
+
+// ══════════════════════════════════════════
+// SHEET → 2-D ARRAY
+// ══════════════════════════════════════════
+function sheetTo2D(ws) {
+  if (!ws || !ws['!ref']) return [];
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const rows  = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const row = new Array(range.e.c + 1).fill(null);
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (!cell) continue;
+      // Header row: prefer formatted text (handles date-serial month names)
+      row[c] = (r === range.s.r && cell.w !== undefined) ? cell.w : cell.v;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+// ══════════════════════════════════════════
+// DATA HELPERS
+// ══════════════════════════════════════════
+
+/**
+ * Build filtered month map: only months within the date range.
+ * Returns [{ label, shortLabel, col }]
+ */
+function buildMonthMap(rows) {
+  const range  = getRange();
+  const header = rows[0] || [];
+  const result = [];
+  for (let c = 2; c < header.length; c++) {
+    const v = header[c];
+    if (v === null || v === undefined || String(v).trim() === '') continue;
+    const parsed = parseLabel(v);
+    if (parsed && inRange(parsed, range)) {
+      result.push({ label: shortLabel(parsed), col: c });
+    }
+  }
+  return result;
+}
+
+/** Find first row where col B matches name (case-insensitive, trimmed). */
+function getRowByName(rows, name) {
+  const needle = name.trim().replace(/\s+/g, ' ').toUpperCase();
+  return rows.find(r =>
+    r[1] !== null && r[1] !== undefined &&
+    String(r[1]).trim().replace(/\s+/g, ' ').toUpperCase() === needle
+  ) || null;
+}
+
+/** Find all rows where col B contains text (case-insensitive). */
+function getRowsContaining(rows, text) {
+  const needle = text.trim().toUpperCase();
+  return rows.filter(r =>
+    r[1] !== null && r[1] !== undefined &&
+    String(r[1]).toUpperCase().includes(needle)
+  );
+}
+
+/** Extract numeric monthly values using the month map. */
+function getMonthlyValues(row, monthMap) {
+  return monthMap.map(m => {
+    const v = row[m.col];
+    if (v === null || v === undefined || v === '') return null;
+    const n = parseFloat(String(v).replace(/,/g, ''));
+    return isNaN(n) ? null : n;
+  });
+}
+
+// ══════════════════════════════════════════
+// APEXCHARTS FACTORY
+// ══════════════════════════════════════════
+const apexInstances = {};
+const sectionLoaded = { efficiency: false, expenses: false };
+
+const APEX_BASE = {
+  chart: {
+    type: 'line',
+    height: 230,
+    background: 'transparent',
+    toolbar: { show: false },
+    zoom:    { enabled: false },
+    animations: { enabled: true, easing: 'easeinout', speed: 500 },
+    fontFamily: "'Segoe UI', system-ui, sans-serif"
+  },
+  theme: { mode: 'dark' },
+  stroke: { curve: 'smooth', width: 2 },
+  markers: { size: 0, hover: { size: 0 } },
+  legend: {
+    position: 'bottom',
+    fontSize: '11px',
+    labels: { colors: '#8b949e' },
+    itemMargin: { horizontal: 8 }
+  },
+  grid: {
+    borderColor: '#21262d',
+    strokeDashArray: 4,
+    xaxis: { lines: { show: false } }
+  },
+  tooltip: {
+    shared: true,
+    intersect: false,
+    theme: 'dark',
+    style: { fontSize: '12px' }
+  },
+  xaxis: {
+    labels: {
+      style: { colors: '#6e7681', fontSize: '11px' },
+      rotate: -30,
+      rotateAlways: false
+    },
+    axisBorder: { color: '#21262d' },
+    axisTicks:  { color: '#21262d' }
+  },
+  yaxis: {
+    labels: { style: { colors: '#6e7681', fontSize: '11px' } }
+  }
+};
+
+/** Generic line chart. decimals controls Y-axis label precision. */
+function renderChart(containerId, labels, series, yTitle, decimals) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  if (apexInstances[containerId]) { apexInstances[containerId].destroy(); delete apexInstances[containerId]; }
+  el.innerHTML = '';
+
+  if (!series.length) {
+    el.innerHTML = '<p style="color:#6e7681;font-size:.8rem;padding:20px 0;text-align:center">No data found</p>';
+    return;
+  }
+
+  const opts = JSON.parse(JSON.stringify(APEX_BASE));
+  opts.series = series.map(s => ({ name: s.label, data: s.data.map(v => v === null ? null : v) }));
+  opts.colors = series.map((_, i) => PALETTE[i % PALETTE.length]);
+  opts.xaxis.categories = labels;
+
+  const fmt = decimals === 0
+    ? (val => val !== undefined && val !== null ? Math.round(val).toLocaleString() : '')
+    : (val => val !== undefined && val !== null ? Number(val).toFixed(decimals ?? 2) : '');
+
+  opts.yaxis = {
+    labels: { style: { colors: '#6e7681', fontSize: '11px' }, formatter: fmt }
+  };
+  if (yTitle) opts.yaxis.title = { text: yTitle, style: { color: '#6e7681', fontSize: '11px' } };
+
+  const chart = new ApexCharts(el, opts);
+  chart.render();
+  apexInstances[containerId] = chart;
+}
+
+/**
+ * Dual-axis line chart: leftSeries on left Y, rightSeries on right Y.
+ * leftDecimals / rightDecimals control label precision (0 = integer).
+ */
+function renderChartDualAxis(containerId, labels, leftSeries, rightSeries, cfg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  if (apexInstances[containerId]) { apexInstances[containerId].destroy(); delete apexInstances[containerId]; }
+  el.innerHTML = '';
+
+  const allSeries = [...leftSeries, ...rightSeries];
+  if (!allSeries.length) {
+    el.innerHTML = '<p style="color:#6e7681;font-size:.8rem;padding:20px 0;text-align:center">No data found</p>';
+    return;
+  }
+
+  const opts = JSON.parse(JSON.stringify(APEX_BASE));
+
+  opts.series = allSeries.map(s => ({ name: s.label, data: s.data.map(v => v === null ? null : v) }));
+  opts.colors = allSeries.map((_, i) => PALETTE[i % PALETTE.length]);
+  opts.xaxis.categories = labels;
+
+  const fmtL = cfg.leftDecimals  === 0 ? v => Math.round(v).toLocaleString() : v => Number(v).toFixed(cfg.leftDecimals  ?? 2);
+  const fmtR = cfg.rightDecimals === 0 ? v => Math.round(v).toLocaleString() : v => Number(v).toFixed(cfg.rightDecimals ?? 2);
+
+  // Build yaxis array: one entry per series (extras share last defined axis)
+  opts.yaxis = [
+    ...leftSeries.map((s, i) => ({
+      seriesName: s.label,
+      title: i === 0 ? { text: cfg.leftTitle  || '', style: { color: PALETTE[0], fontSize: '11px' } } : undefined,
+      showAlways: true,
+      labels: { style: { colors: '#6e7681', fontSize: '11px' }, formatter: fmtL }
+    })),
+    ...rightSeries.map((s, i) => ({
+      seriesName: s.label,
+      opposite: true,
+      title: i === 0 ? { text: cfg.rightTitle || '', style: { color: PALETTE[leftSeries.length], fontSize: '11px' } } : undefined,
+      showAlways: true,
+      labels: { style: { colors: '#6e7681', fontSize: '11px' }, formatter: fmtR }
+    }))
+  ];
+
+  const chart = new ApexCharts(el, opts);
+  chart.render();
+  apexInstances[containerId] = chart;
+}
+
+/**
+ * Get monthly values as percentages (×100 if values look like fractions 0–1).
+ * Returns values rounded to 2 decimal places.
+ */
+function getMonthlyPct(row, monthMap) {
+  const vals    = getMonthlyValues(row, monthMap);
+  const nonNull = vals.filter(v => v !== null);
+  const isDecimal = nonNull.length > 0 && Math.max(...nonNull) <= 1.5; // fraction-based %
+  return vals.map(v => v === null ? null : parseFloat((isDecimal ? v * 100 : v).toFixed(2)));
+}
+
+// ══════════════════════════════════════════
+// KPI HELPERS
+// ══════════════════════════════════════════
+
+function fmtKpi(val, decimals) {
+  if (val === null || val === undefined) return '—';
+  if (decimals === 0) return Math.round(val).toLocaleString();
+  return Number(val).toFixed(decimals ?? 2);
+}
+
+function diffBlock(curr, ref) {
+  if (curr === null || ref === null || ref === 0)
+    return '<div class="kpi-diff-val kpi-neutral">—</div>';
+  const pct = ((curr - ref) / Math.abs(ref)) * 100;
+  const abs = curr - ref;
+  const up  = pct >= 0;
+  const cls = up ? 'kpi-up' : 'kpi-down';
+  const arrow = up ? '▲' : '▼';
+  const sign  = up ? '+' : '';
+  return `
+    <div class="kpi-diff-val ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}%</div>
+    <div class="kpi-diff-abs ${cls}">${sign}${Number(abs).toLocaleString(undefined,{maximumFractionDigits:2})}</div>`;
+}
+
+/**
+ * Render KPI panel for a set of series.
+ * seriesData: [{ label, data, color, decimals }]
+ * labels: short month labels aligned with data
+ */
+function renderKPIs(containerId, seriesData, labels) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+
+  const currYear = "'" + String(new Date().getFullYear()).slice(2);
+
+  seriesData.forEach(s => {
+    const vals = s.data;
+    const n    = vals.length;
+
+    // Latest non-null = current month (Feb '26)
+    let ci = n - 1;
+    while (ci >= 0 && vals[ci] === null) ci--;
+    const curr      = ci >= 0 ? vals[ci] : null;
+    const currLabel = ci >= 0 ? labels[ci] : '—';
+
+    // Previous month
+    let pi = ci - 1;
+    while (pi >= 0 && vals[pi] === null) pi--;
+    const prev      = pi >= 0 ? vals[pi] : null;
+    const prevLabel = pi >= 0 ? labels[pi] : '—';
+
+    // YTD average of current year only
+    const ytdVals = vals.filter((v, i) => v !== null && labels[i] && labels[i].endsWith(currYear));
+    const ytdAvg  = ytdVals.length ? ytdVals.reduce((a, b) => a + b, 0) / ytdVals.length : null;
+    const ytdYear = new Date().getFullYear();
+
+    const color = s.color || PALETTE[0];
+    const sec   = document.createElement('div');
+    sec.className = 'kpi-section';
+    sec.innerHTML = `
+      <div class="kpi-series-label" style="border-left:3px solid ${color}">&nbsp;${s.label}</div>
+      <div class="kpi-cards-row">
+        <div class="kpi-card">
+          <div class="kpi-card-label">${currLabel}</div>
+          <div class="kpi-card-val">${fmtKpi(curr, s.decimals)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card-label">vs ${prevLabel}</div>
+          ${diffBlock(curr, prev)}
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card-label">vs ${ytdYear} avg</div>
+          ${diffBlock(curr, ytdAvg)}
+        </div>
+      </div>`;
+    el.appendChild(sec);
+  });
+}
+
+// ══════════════════════════════════════════
+// PIE / DONUT CHART
+// ══════════════════════════════════════════
+
+/** Strip "(HOURS)", "(SUM)", leading "STOP " for cleaner pie labels */
+function cleanStopLabel(lbl) {
+  return lbl
+    .replace(/\s*\(HOURS\)\s*/gi, '')
+    .replace(/\s*\(SUM\)\s*/gi, '')
+    .replace(/^STOP\s+/i, '')
+    .trim();
+}
+
+/**
+ * Render a donut chart.
+ * entries: [{ label, value }]
+ */
+function renderPieChart(containerId, entries, height) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (apexInstances[containerId]) { apexInstances[containerId].destroy(); delete apexInstances[containerId]; }
+  el.innerHTML = '';
+
+  const filtered = entries.filter(e => e.value !== null && e.value > 0);
+  if (!filtered.length) {
+    el.innerHTML = '<p style="color:#6e7681;font-size:.8rem;padding:16px 0;text-align:center">No data</p>';
+    return;
+  }
+
+  const opts = {
+    chart: {
+      type: 'donut',
+      height: height || 260,
+      background: 'transparent',
+      fontFamily: "'Segoe UI', system-ui, sans-serif",
+      toolbar: { show: false }
+    },
+    theme: { mode: 'dark' },
+    series: filtered.map(e => e.value),
+    labels: filtered.map(e => e.label),
+    colors: PALETTE,
+    plotOptions: {
+      pie: {
+        donut: {
+          size: '62%',
+          labels: {
+            show: true,
+            total: {
+              show: true,
+              label: 'Total',
+              color: '#8b949e',
+              fontSize: '11px',
+              formatter: w => {
+                const t = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                return Math.round(t).toLocaleString();
+              }
+            },
+            value: { color: '#e6edf3', fontSize: '14px', fontWeight: 700 }
+          }
+        }
+      }
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: val => val.toFixed(1) + '%',
+      style: { fontSize: '10px', colors: ['#e6edf3'] },
+      dropShadow: { enabled: false }
+    },
+    legend: {
+      position: 'bottom',
+      fontSize: '10px',
+      labels: { colors: '#8b949e' },
+      itemMargin: { horizontal: 4, vertical: 2 }
+    },
+    tooltip: {
+      theme: 'dark',
+      y: { formatter: val => Math.round(val).toLocaleString() }
+    }
+  };
+
+  const chart = new ApexCharts(el, opts);
+  chart.render();
+  apexInstances[containerId] = chart;
+}
+
+// ══════════════════════════════════════════
+// SECTION RENDERERS
+// ══════════════════════════════════════════
+function renderEfficiency(forgingRows, processingRows) {
+
+  const fMap    = buildMonthMap(forgingRows);
+  const pMap    = buildMonthMap(processingRows);
+  const fLabels = fMap.map(m => m.label);
+  const pLabels = pMap.map(m => m.label);
+
+  const range = getRange();
+  document.getElementById('date-range-badge').textContent =
+    `${MONTHS_SHORT[range.startM]} '${String(range.startY).slice(2)} – ${MONTHS_SHORT[range.endM]} '${String(range.endY).slice(2)}`;
+
+  // 0. Cycles / Hour + KPIs
+  {
+    const r = getRowByName(forgingRows, 'CYCLES / HOUR');
+    const s = r ? { label: 'Cycles / Hour', data: getMonthlyValues(r, fMap), color: PALETTE[2], decimals: 0 } : null;
+    renderChart('chart-cyclesHour', fLabels, s ? [s] : [], 'Cycles/h', 0);
+    if (s) renderKPIs('kpis-cyclesHour', [s], fLabels);
+  }
+
+  // 1. Forged Cycles — dual axis + KPIs
+  {
+    const r1 = getRowByName(forgingRows, 'FORGED CYCLES');
+    const r2 = getRowByName(forgingRows, 'AVERAGE CYCLES PER REFERENCE');
+    const s1 = r1 ? { label: 'Forged Cycles',            data: getMonthlyValues(r1, fMap), color: PALETTE[0], decimals: 0 } : null;
+    const s2 = r2 ? { label: 'Avg Cycles per Reference', data: getMonthlyValues(r2, fMap), color: PALETTE[1], decimals: 2 } : null;
+    renderChartDualAxis('chart-forgedCycles', fLabels,
+      s1 ? [s1] : [], s2 ? [s2] : [],
+      { leftTitle: 'Forged Cycles', leftDecimals: 0, rightTitle: 'Avg Cycles/Ref', rightDecimals: 0 });
+    renderKPIs('kpis-forgedCycles', [s1, s2].filter(Boolean), fLabels);
+  }
+
+  // 2. Forged Parts + KPIs
+  {
+    const r  = getRowByName(forgingRows, 'FORGED PARTS');
+    const s  = r ? { label: 'Forged Parts', data: getMonthlyValues(r, fMap), color: PALETTE[0], decimals: 0 } : null;
+    renderChart('chart-forgedParts', fLabels, s ? [s] : [], 'Parts', 0);
+    if (s) renderKPIs('kpis-forgedParts', [s], fLabels);
+  }
+
+  // 3. OEE + KPIs (OEE TARGET in chart only, no KPI for it)
+  {
+    const kpiNames  = ['OEE','F1 OEE','F2 OEE','F3 OEE'];
+    const chartNames = ['OEE TARGET', ...kpiNames];
+    const chartDs = chartNames.map((n, i) => {
+      const r = getRowByName(forgingRows, n);
+      return r ? { label: n, data: getMonthlyPct(r, fMap), color: PALETTE[i], decimals: 2 } : null;
+    }).filter(Boolean);
+    renderChart('chart-oee', fLabels, chartDs, '%', 2);
+    const kpiDs = kpiNames.map((n, i) => {
+      const r = getRowByName(forgingRows, n);
+      return r ? { label: n, data: getMonthlyPct(r, fMap), color: PALETTE[i + 1], decimals: 2 } : null;
+    }).filter(Boolean);
+    if (kpiDs.length) renderKPIs('kpis-oee', kpiDs, fLabels);
+  }
+
+  // 4. Average Working Speed + KPIs
+  {
+    const r = getRowByName(forgingRows, 'AVERAGE WORKING SPEED');
+    const s = r ? { label: 'Avg Working Speed', data: getMonthlyValues(r, fMap), color: PALETTE[0], decimals: 0 } : null;
+    renderChart('chart-speed', fLabels, s ? [s] : [], 'cycles/h', 0);
+    if (s) renderKPIs('kpis-speed', [s], fLabels);
+  }
+
+  // 5a. Stops (HOURS) + KPIs + pie of latest month
+  {
+    const stopHoursRows = getRowsContaining(forgingRows, '(HOURS)');
+    const ds = stopHoursRows.map((r, i) => ({
+      label:    String(r[1]).trim(),
+      data:     getMonthlyValues(r, fMap),
+      color:    PALETTE[i % PALETTE.length],
+      decimals: 0
+    }));
+    renderChart('chart-stopsHours', fLabels, ds, 'Hours', 0);
+    if (ds.length) renderKPIs('kpis-stopsHours', ds, fLabels);
+
+    // Pie: breakdown of latest non-null month per series
+    const pieEntries = ds.map(s => {
+      const vals    = s.data;
+      let ci = vals.length - 1;
+      while (ci >= 0 && vals[ci] === null) ci--;
+      return { label: cleanStopLabel(s.label), value: ci >= 0 ? vals[ci] : null };
+    });
+    renderPieChart('chart-stopsHoursPie', pieEntries, 240);
+  }
+
+  // 5b. Stops (SUM) — line + pie of latest cumulative value
+  {
+    const stopSumRows = getRowsContaining(forgingRows, '(SUM)');
+    const ds = stopSumRows.map((r, i) => ({
+      label:    String(r[1]).trim(),
+      data:     getMonthlyValues(r, fMap),
+      color:    PALETTE[i % PALETTE.length],
+      decimals: 0
+    }));
+    renderChart('chart-stopsSum', fLabels, ds, 'Cumulative Hours', 0);
+
+    // Pie: latest cumulative value per series
+    const pieEntries = ds.map(s => {
+      const vals = s.data;
+      let ci = vals.length - 1;
+      while (ci >= 0 && vals[ci] === null) ci--;
+      return { label: cleanStopLabel(s.label), value: ci >= 0 ? vals[ci] : null };
+    });
+    renderPieChart('chart-stopsSumPie', pieEntries, 260);
+  }
+
+  // 6. Parts Sold + KPIs
+  {
+    const r = getRowByName(processingRows, 'PARTS SOLD');
+    const s = r ? { label: 'Parts Sold', data: getMonthlyValues(r, pMap), color: PALETTE[0], decimals: 0 } : null;
+    renderChart('chart-partsSold', pLabels, s ? [s] : [], 'Parts', 0);
+    if (s) renderKPIs('kpis-partsSold', [s], pLabels);
+  }
+
+  // 7. Weight Processed (Net) + KPIs
+  {
+    const r = getRowByName(processingRows, 'WEIGHT PROCESSED (NET)');
+    const s = r ? { label: 'Weight Processed (Net)', data: getMonthlyValues(r, pMap), color: PALETTE[0], decimals: 0 } : null;
+    renderChart('chart-weight', pLabels, s ? [s] : [], 'kg', 0);
+    if (s) renderKPIs('kpis-weight', [s], pLabels);
+  }
+}
+
+// ══════════════════════════════════════════
+// EXPENSES RENDER
+// ══════════════════════════════════════════
+function renderExpenses(expRows) {
+  const eMap    = buildMonthMap(expRows);
+  const eLabels = eMap.map(m => m.label);
+  const range   = getRange();
+
+  document.getElementById('exp-date-range-badge').textContent =
+    `${MONTHS_SHORT[range.startM]} '${String(range.startY).slice(2)} – ${MONTHS_SHORT[range.endM]} '${String(range.endY).slice(2)}`;
+
+  // ── Tool & Die ──
+  {
+    const names = [
+      { key: 'TOOLING COST $ (P&L)',                label: 'Tooling Cost',          color: PALETTE[0], decimals: 0 },
+      { key: 'P&L AVERAGE EXPENSE LAST 3 MONTHS',   label: 'P&L Avg Last 3 Months', color: PALETTE[1], decimals: 0 },
+      { key: 'BUDGET 3,6%',                         label: 'Budget 3,6%',           color: PALETTE[2], decimals: 0 },
+    ];
+    const ds = names.map(({ key, label, color, decimals }) => {
+      const r = getRowByName(expRows, key);
+      return r ? { label, data: getMonthlyValues(r, eMap), color, decimals } : null;
+    }).filter(Boolean);
+    renderChart('chart-toolDie', eLabels, ds, '$', 0);
+    if (ds.length) renderKPIs('kpis-toolDie', ds, eLabels);
+  }
+
+  // ── LC Invoices ──
+  {
+    const names = [
+      { key: 'TOOLING OUTSOURCING (LC INVOICES)',      label: 'LC Invoices',           color: PALETTE[0], decimals: 0 },
+      { key: 'OTHER EXPENSES',                         label: 'Other Expenses',         color: PALETTE[1], decimals: 0 },
+      { key: 'TOTAL EXPENSE LAST 3 MONTHS AVERAGE',   label: 'Total Avg Last 3 Months',color: PALETTE[2], decimals: 0 },
+    ];
+    const ds = names.map(({ key, label, color, decimals }) => {
+      const r = getRowByName(expRows, key);
+      return r ? { label, data: getMonthlyValues(r, eMap), color, decimals } : null;
+    }).filter(Boolean);
+    renderChart('chart-lcInvoices', eLabels, ds, '$', 0);
+    if (ds.length) renderKPIs('kpis-lcInvoices', ds, eLabels);
+  }
+
+  // ── Maintenance ──
+  {
+    const names = [
+      { key: 'SPARE PARTS $ - PREPAID $',               label: 'Spare Parts',       color: PALETTE[0], decimals: 0 },
+      { key: 'LABOR $ - PREPAID $',                     label: 'Labor',             color: PALETTE[1], decimals: 0 },
+      { key: 'MATERIAL $ - PREPAID $',                  label: 'Material',          color: PALETTE[2], decimals: 0 },
+      { key: 'PREPAID $',                               label: 'Prepaid',           color: PALETTE[3], decimals: 0 },
+      { key: 'EXPENSE TARGET ACCORDING TARGET 2,2%',    label: 'Target 2,2%',       color: PALETTE[4], decimals: 0 },
+    ];
+    const ds = names.map(({ key, label, color, decimals }) => {
+      const r = getRowByName(expRows, key);
+      return r ? { label, data: getMonthlyValues(r, eMap), color, decimals } : null;
+    }).filter(Boolean);
+    renderChart('chart-maintenance', eLabels, ds, '$', 0);
+    if (ds.length) renderKPIs('kpis-maintenance', ds, eLabels);
+  }
+}
+
+// ══════════════════════════════════════════
+// WORKBOOK PROCESSING
+// ══════════════════════════════════════════
+function processWorkbook(wb) {
+  const sheets = {};
+
+  wb.SheetNames.forEach(name => {
+    const key = name.trim().toUpperCase();
+    if (key === 'FORGING DATA')    sheets.forging    = sheetTo2D(wb.Sheets[name]);
+    if (key === 'PROCESSING DATA') sheets.processing = sheetTo2D(wb.Sheets[name]);
+    if (key === '$ EXPENSES DATA') sheets.expenses   = sheetTo2D(wb.Sheets[name]);
+  });
+
+  // Fallback: partial match
+  if (!sheets.forging) {
+    const m = wb.SheetNames.find(n => n.toUpperCase().includes('FORGING'));
+    if (m) sheets.forging = sheetTo2D(wb.Sheets[m]);
+  }
+  if (!sheets.processing) {
+    const m = wb.SheetNames.find(n => n.toUpperCase().includes('PROCESSING'));
+    if (m) sheets.processing = sheetTo2D(wb.Sheets[m]);
+  }
+  if (!sheets.expenses) {
+    const m = wb.SheetNames.find(n => n.toUpperCase().includes('EXPENSES'));
+    if (m) sheets.expenses = sheetTo2D(wb.Sheets[m]);
+  }
+
+  if (!sheets.forging || !sheets.processing) {
+    alert(
+      '⚠ Could not find required sheets.\n\n' +
+      'Expected: "FORGING DATA" and "PROCESSING DATA"\n\n' +
+      'Found: ' + wb.SheetNames.join(', ')
+    );
+    return;
+  }
+
+  document.getElementById('empty-state').style.display = 'none';
+  sectionLoaded.efficiency = true;
+  document.getElementById('section-efficiency').classList.add('active');
+  renderEfficiency(sheets.forging, sheets.processing);
+
+  if (sheets.expenses) {
+    sectionLoaded.expenses = true;
+    renderExpenses(sheets.expenses);
+  }
+}
+
+// ══════════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════════
+function readFile(file) {
+  if (!file) return;
+  document.getElementById('file-status').textContent = '';
+  document.getElementById('upload-label').textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      processWorkbook(wb);
+      document.getElementById('file-status').textContent = '✔ ' + file.name;
+    } catch (err) {
+      console.error(err);
+      alert('Error reading file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleFileInput(e) { readFile(e.target.files[0]); }
+
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.add('drag-over');
+}
+function handleDragLeave() {
+  document.getElementById('upload-zone').classList.remove('drag-over');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  readFile(e.dataTransfer.files[0]);
+}
+
+// ══════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════
+document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    const sec = item.dataset.section;
+    document.getElementById('topbar-title').textContent =
+      sec.charAt(0).toUpperCase() + sec.slice(1);
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById('section-' + sec);
+    if (target && sectionLoaded[sec]) target.classList.add('active');
+    document.getElementById('empty-state').style.display =
+      sectionLoaded[sec] ? 'none' : '';
+  });
+});
+</script>
+</body>
+</html>
